@@ -144,6 +144,7 @@ errcode_t ext2fs_new_inode(ext2_filsys fs, ext2_ino_t dir,
  * Stupid algorithm --- we now just search forward starting from the
  * goal.  Should put in a smarter one someday....
  */
+blk64_t last_allocated = 0;
 errcode_t ext2fs_new_block3(ext2_filsys fs, blk64_t goal,
 			    ext2fs_block_bitmap map, blk64_t *ret,
 			    struct blk_alloc_ctx *ctx)
@@ -185,6 +186,10 @@ errcode_t ext2fs_new_block3(ext2_filsys fs, blk64_t goal,
 		goal = fs->super->s_first_data_block;
 	goal &= ~EXT2FS_CLUSTER_MASK(fs);
 
+	if (goal == 0) {
+		goal = last_allocated;
+	}
+
 	retval = ext2fs_find_first_zero_block_bitmap2(map,
 			goal, ext2fs_blocks_count(fs->super) - 1, &b);
 	if ((retval == ENOENT) && (goal != fs->super->s_first_data_block))
@@ -198,6 +203,7 @@ allocated:
 
 	ext2fs_clear_block_uninit(fs, ext2fs_group_of_blk2(fs, b));
 	*ret = b;
+	last_allocated = b;
 	return 0;
 }
 
