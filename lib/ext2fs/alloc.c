@@ -103,7 +103,8 @@ errcode_t ext2fs_new_inode(ext2_filsys fs, ext2_ino_t dir,
 
 	if (dir > 0) {
 		group = (dir - 1) / EXT2_INODES_PER_GROUP(fs->super);
-		start_inode = (group * EXT2_INODES_PER_GROUP(fs->super)) + 1;
+		// start_inode = (group * EXT2_INODES_PER_GROUP(fs->super)) + 1;
+		start_inode = fs->reserved[2];
 	}
 	if (start_inode < EXT2_FIRST_INODE(fs->super))
 		start_inode = EXT2_FIRST_INODE(fs->super);
@@ -137,6 +138,7 @@ errcode_t ext2fs_new_inode(ext2_filsys fs, ext2_ino_t dir,
 	if (ext2fs_test_inode_bitmap2(map, i))
 		return EXT2_ET_INODE_ALLOC_FAIL;
 	*ret = i;
+	fs->reserved[2] = i;
 	return 0;
 }
 
@@ -144,7 +146,6 @@ errcode_t ext2fs_new_inode(ext2_filsys fs, ext2_ino_t dir,
  * Stupid algorithm --- we now just search forward starting from the
  * goal.  Should put in a smarter one someday....
  */
-blk64_t last_allocated = 0;
 errcode_t ext2fs_new_block3(ext2_filsys fs, blk64_t goal,
 			    ext2fs_block_bitmap map, blk64_t *ret,
 			    struct blk_alloc_ctx *ctx)
@@ -182,13 +183,11 @@ errcode_t ext2fs_new_block3(ext2_filsys fs, blk64_t goal,
 		map = fs->block_map;
 	if (!map)
 		return EXT2_ET_NO_BLOCK_BITMAP;
+	
+	goal = fs->reserved[3];
 	if (!goal || (goal >= ext2fs_blocks_count(fs->super)))
 		goal = fs->super->s_first_data_block;
 	goal &= ~EXT2FS_CLUSTER_MASK(fs);
-
-	if (goal == 0) {
-		goal = last_allocated;
-	}
 
 	retval = ext2fs_find_first_zero_block_bitmap2(map,
 			goal, ext2fs_blocks_count(fs->super) - 1, &b);
@@ -203,7 +202,7 @@ allocated:
 
 	ext2fs_clear_block_uninit(fs, ext2fs_group_of_blk2(fs, b));
 	*ret = b;
-	last_allocated = b;
+	fs->reserved[3] = (__u32)b;	// not 64-bit safe
 	return 0;
 }
 
