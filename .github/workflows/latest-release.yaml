@@ -1,0 +1,45 @@
+name: latest-release
+
+on:
+  push:
+    branches:
+    - master
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        sudo apt update -y
+
+    - name: Build
+      working-directory: ${{github.workspace}}
+      shell: bash
+      run: |
+        ${{github.workspace}}/build.sh
+
+    - uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "latest"
+        prerelease: false
+        title: "Development Build"
+        files: |
+          build/libext2fs.tar.gz
+
+
+
+
+
+
+
+
+
