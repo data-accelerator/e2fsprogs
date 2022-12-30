@@ -20,31 +20,12 @@
 #include "ext2fs.h"
 #include "ext2fsP.h"
 
-#define EXT2_DX_ROOT_OFF 24
-
-struct dx_frame {
-	void *buf;
-	blk64_t pblock;
-	struct ext2_dx_countlimit *head;
-	struct ext2_dx_entry *entries;
-	struct ext2_dx_entry *at;
-};
-
-struct dx_lookup_info {
-	const char *name;
-	int namelen;
-	int hash_alg;
-	__u32 hash;
-	unsigned levels;
-	struct dx_frame frames[EXT4_HTREE_LEVEL];
-};
-
-static errcode_t alloc_dx_frame(ext2_filsys fs, struct dx_frame *frame)
+errcode_t alloc_dx_frame(ext2_filsys fs, struct dx_frame *frame)
 {
 	return ext2fs_get_mem(fs->blocksize, &frame->buf);
 }
 
-static void dx_release(struct dx_lookup_info *info)
+void dx_release(struct dx_lookup_info *info)
 {
 	unsigned level;
 
@@ -72,7 +53,7 @@ static void dx_search_entry(struct dx_frame *frame, int count, __u32 hash)
 	frame->at = p - 1;
 }
 
-static errcode_t load_logical_dir_block(ext2_filsys fs, ext2_ino_t dir,
+errcode_t load_logical_dir_block(ext2_filsys fs, ext2_ino_t dir,
 					struct ext2_inode *diri, blk64_t block,
 					blk64_t *pblk, void *buf)
 {
@@ -88,7 +69,7 @@ static errcode_t load_logical_dir_block(ext2_filsys fs, ext2_ino_t dir,
 	return ext2fs_read_dir_block4(fs, *pblk, buf, 0, dir);
 }
 
-static errcode_t dx_lookup(ext2_filsys fs, ext2_ino_t dir,
+errcode_t dx_lookup(ext2_filsys fs, ext2_ino_t dir,
 			   struct ext2_inode *diri, struct dx_lookup_info *info)
 {
 	struct ext2_dx_root_info *root;

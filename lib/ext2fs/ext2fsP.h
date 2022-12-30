@@ -208,3 +208,28 @@ errcode_t ext2fs_add_exit_fn(ext2_exit_fn fn, void *data);
 errcode_t ext2fs_remove_exit_fn(ext2_exit_fn fn, void *data);
 
 #define EXT2FS_BUILD_BUG_ON(cond) ((void)sizeof(char[1 - 2*!!(cond)]))
+
+/* htree */
+#define EXT2_DX_ROOT_OFF 24
+struct dx_frame {
+	void *buf;
+	blk64_t pblock;
+	struct ext2_dx_countlimit *head;
+	struct ext2_dx_entry *entries;
+	struct ext2_dx_entry *at;
+};
+struct dx_lookup_info {
+	const char *name;
+	int namelen;
+	int hash_alg;
+	__u32 hash;
+	unsigned levels;
+	struct dx_frame frames[EXT4_HTREE_LEVEL];
+};
+errcode_t alloc_dx_frame(ext2_filsys fs, struct dx_frame *frame);
+void dx_release(struct dx_lookup_info *info);
+errcode_t load_logical_dir_block(ext2_filsys fs, ext2_ino_t dir,
+					struct ext2_inode *diri, blk64_t block,
+					blk64_t *pblk, void *buf);
+errcode_t dx_lookup(ext2_filsys fs, ext2_ino_t dir,
+			   struct ext2_inode *diri, struct dx_lookup_info *info);
