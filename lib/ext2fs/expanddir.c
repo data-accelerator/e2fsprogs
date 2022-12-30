@@ -84,7 +84,119 @@ static int expand_dir_proc(ext2_filsys	fs,
 		return BLOCK_CHANGED;
 }
 
-errcode_t ext2fs_expand_dir(ext2_filsys fs, ext2_ino_t dir)
+struct ext2_fake_dirent
+{
+	__le32 inode;
+	__le16 rec_len;
+	__u8 name_len;
+	__u8 file_type;
+};
+
+struct ext2_dx_root
+{
+	struct ext2_fake_dirent dot;
+	char dot_name[4];
+	struct ext2_fake_dirent dotdot;
+	char dotdot_name[4];
+	struct ext2_dx_root_info info;
+	struct ext2_dx_entry entries[];
+};
+
+#define EXT4_MAX_REC_LEN		((1<<16)-1)
+
+static unsigned int get_rec_len(ext2_filsys fs, unsigned int len) {
+	if (fs->blocksize < 65536)
+		return len;
+	else if (len == EXT4_MAX_REC_LEN || len == 0)
+		return fs->blocksize;
+	else
+		return (len & 65532) | ((len & 3) << 16);
+}
+
+static struct ext2_dir_entry_2 *get_next_entry(ext2_filsys fs, struct ext2_dir_entry_2 *p) {
+    return (struct ext2_dir_entry_2 *) ((char *) p + get_rec_len(fs, p->rec_len));
+}
+
+static errcode_t ext2fs_expand_dir2(ext2_filsys fs, ext2_ino_t dir);
+
+/*
+ * This converts a one block unindexed directory to a 2 block indexed
+ * directory, and adds the dentry to the indexed directory.
+ */
+static errcode_t make_indexed_dir(ext2_filsys fs, ext2_ino_t dir, struct ext2_inode *diri) {
+    errcode_t retval;
+    int csum_size = 0;
+    unsigned int blocksize = fs->blocksize;
+    struct ext2_dx_root *root;
+    struct ext2_fake_dirent *fde;
+    struct ext2_dir_entry_2 *de, *de2;
+    unsigned int len;
+    char *data2, *top;
+    struct ext2_dx_entry *entries;
+    struct dx_lookup_info dx_info;
+
+    if (ext2fs_has_feature_metadata_csum(fs->super))
+		csum_size = sizeof(struct ext2_dir_entry_tail);
+
+    if ((retval = ext2fs_expand_dir2(fs, dir)) != 0)
+        return retval;
+    if ((retval = ext2fs_read_inode(fs, dir, diri)) != 0)
+        return retval;
+
+    dx_info.levels = 2;
+    for (int i = 0; i < dx_info.levels; i++) {
+        if ((retval = alloc_dx_frame(fs, dx_info.frames + i)) != 0)
+            return retval;
+        load_logical_dir_block(fs, dir, diri, i, &(dx_info.frames[i].pblock), dx_info.frames[i].buf);
+    }
+
+    /* The 0th block becomes the root, move the dirents out */
+    root = (struct ext2_dx_root *) (dx_info.frames[0].buf);
+    fde = &(root->dotdot);
+    de = (struct ext2_dir_entry_2 *) ((char *) fde + get_rec_len(fs, fde->rec_len));
+    if ((char *) de >= (((char *) root) + blocksize))
+        return EXT2_FILSYS_CORRUPTED;
+    len = ((char *) root) + (blocksize - csum_size) - (char *) de;
+    data2 = dx_info.frames[1].buf;
+    memcpy(data2, de, len);
+    memset(de, 0, len);
+    de = (struct ext2_dir_entry_2 *) data2;
+    top = data2 + len;
+    while ((char *) (de2 = get_next_entry(fs, de)) < top)
+        de = de2;
+    ext2fs_set_rec_len(fs, data2 + (blocksize - csum_size) - (char *) de, de);
+    if (csum_size)
+        ext2fs_initialize_dirent_tail(fs, EXT2_DIRENT_TAIL(data2, blocksize));
+
+    /* Initialize the root; the dot dirents already exist */
+    diri->i_flags |= EXT2_INDEX_FL;
+    de = (struct ext2_dir_entry_2 *) (&root->dotdot);
+    ext2fs_set_rec_len(fs, blocksize - EXT2_DIR_REC_LEN(2), de);
+    memset(&root->info, 0, sizeof(root->info));
+    root->info.info_length = sizeof(root->info);
+    if (ext4_hash_in_dirent(diri)) {
+        root->info.hash_version = EXT2_HASH_SIPHASH;
+    } else {
+        root->info.hash_version = fs->super->s_def_hash_version;
+    }
+    entries = root->entries;
+    entries->block = ext2fs_cpu_to_le32(1);
+    ((struct ext2_dx_countlimit *) entries)->count = ext2fs_cpu_to_le16(1);
+    ((struct ext2_dx_countlimit *) entries)->limit = ext2fs_cpu_to_le16((blocksize - (32 + csum_size)) / sizeof(struct ext2_dx_entry));
+
+    /* write out blocks */
+    for (int i = 0; i < dx_info.levels; i++)
+        ext2fs_write_dir_block4(fs, dx_info.frames[i].pblock, dx_info.frames[i].buf, 0, dir);
+    /* write out inode (dx_root) */
+	if ((retval = ext2fs_write_inode(fs, dir, diri)) != 0)
+		return retval;
+
+    /* free frames */
+    dx_release(&dx_info);
+    return 0;
+}
+
+static errcode_t ext2fs_expand_dir2(ext2_filsys fs, ext2_ino_t dir)
 {
 	errcode_t	retval;
 	struct expand_dir_struct es;
@@ -140,4 +252,21 @@ errcode_t ext2fs_expand_dir(ext2_filsys fs, ext2_ino_t dir)
 		return retval;
 
 	return 0;
+}
+
+errcode_t ext2fs_expand_dir(ext2_filsys fs, ext2_ino_t dir) {
+    errcode_t retval;
+    struct ext2_inode inode;
+
+    retval = ext2fs_read_inode(fs, dir, &inode);
+	if (retval)
+		return retval;
+
+    unsigned int blocks = inode.i_size >> (fs->super->s_log_block_size + EXT2_MIN_BLOCK_LOG_SIZE);
+
+    /* htree */
+    if (blocks == 1 && ext2fs_has_feature_dir_index(fs->super) && !(inode.i_flags & EXT2_INDEX_FL))
+        return make_indexed_dir(fs, dir, &inode);
+
+    return ext2fs_expand_dir2(fs, dir);
 }
