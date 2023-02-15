@@ -59,6 +59,8 @@ extern "C" {
 
 #define UUID_STR_SIZE 37
 
+#define NO_TIMESTAMP 1
+
 /*
  * The last ext2fs revision level that this version of the library is
  * able to support.

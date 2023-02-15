@@ -307,6 +307,9 @@ static errcode_t dx_move_dirents(ext2_filsys fs, struct dx_hash_map *map,
 	int csum_size = 0;
 	void *base = to;
 
+	// clean 'to' buf
+	memset(to, 0, fs->blocksize);
+
 	if (ext2fs_has_feature_metadata_csum(fs->super))
 		csum_size = sizeof(struct ext2_dir_entry_tail);
 
