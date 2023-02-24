@@ -183,7 +183,7 @@ errcode_t ext2fs_new_block3(ext2_filsys fs, blk64_t goal,
 		map = fs->block_map;
 	if (!map)
 		return EXT2_ET_NO_BLOCK_BITMAP;
-	
+
 	goal = fs->reserved[3];
 	if (!goal || (goal >= ext2fs_blocks_count(fs->super)))
 		goal = fs->super->s_first_data_block;
@@ -445,7 +445,8 @@ errcode_t ext2fs_new_range(ext2_filsys fs, int flags, blk64_t goal,
 	if (!map)
 		return EXT2_ET_NO_BLOCK_BITMAP;
 	if (!goal || goal >= ext2fs_blocks_count(fs->super))
-		goal = fs->super->s_first_data_block;
+		goal = fs->reserved[3];
+		// goal = fs->super->s_first_data_block;
 
 	start = goal;
 	while (!looped || start <= goal) {
@@ -492,6 +493,7 @@ allocated:
 			     b += fs->super->s_blocks_per_group)
 				ext2fs_clear_block_uninit(fs,
 						ext2fs_group_of_blk2(fs, b));
+			fs->reserved[3] = (__u32) end;
 			return 0;
 		}
 
