@@ -21,6 +21,10 @@ sudo make install
 mkdir libext2fs libext2fs/include libext2fs/lib
 cp -r ${VERSION}/include/ext2fs libext2fs/include
 cp -P ${VERSION}/lib/libext2fs.so* libext2fs/lib
-tar -zcf libext2fs.tar.gz libext2fs
+if [[ ${ARCH} == "aarch64" ]];then
+    tar -zcf libext2fs.${ARCH}.tar.gz libext2fs
+else
+    tar -zcf libext2fs.tar.gz libext2fs
+fi
 
 echo "done"
