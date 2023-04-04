@@ -11,31 +11,28 @@ on:
 jobs:
   build:
     name: Build Release Library
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
+    container: ubuntu:18.04
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install Dependencies
-      shell: bash
-      run: |
-        sudo apt update -y
-
+    - uses: actions/checkout@v3
     - name: Build
-      working-directory: ${{github.workspace}}
       shell: bash
       run: |
-        ${{github.workspace}}/build.sh
+        apt update -y
+        apt install -y sudo build-essential
+        ./build.sh
 
     - name: Upload build
       uses: actions/upload-artifact@v3
       with:
         name: builds
-        path: ${{github.workspace}}/build/libext2fs.tar.gz
+        path: build/libext2fs.tar.gz
 
 
   build-on-aarch64:
     name: Build Release Library For AArch64
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - uses: uraimo/run-on-arch-action@v2
@@ -62,16 +59,16 @@ jobs:
       with:
         name: builds
         path: ${{github.workspace}}/build/libext2fs*.tar.gz
-  
+
 
   release:
     name: Create Latest Release
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     needs: [build, build-on-aarch64]
     steps:
       - name: Download builds
         uses: actions/download-artifact@v3
-      
+
       - name: Display structure of downloaded files
         run: ls -l builds
 

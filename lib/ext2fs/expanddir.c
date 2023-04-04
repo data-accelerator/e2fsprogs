@@ -105,12 +105,12 @@ struct ext2_dx_root
 #define EXT4_MAX_REC_LEN		((1<<16)-1)
 
 static unsigned int get_rec_len(ext2_filsys fs, unsigned int len) {
-	if (fs->blocksize < 65536)
-		return len;
-	else if (len == EXT4_MAX_REC_LEN || len == 0)
-		return fs->blocksize;
-	else
-		return (len & 65532) | ((len & 3) << 16);
+    if (fs->blocksize < 65536)
+        return len;
+    else if (len == EXT4_MAX_REC_LEN || len == 0)
+        return fs->blocksize;
+    else
+        return (len & 65532) | ((len & 3) << 16);
 }
 
 static struct ext2_dir_entry_2 *get_next_entry(ext2_filsys fs, struct ext2_dir_entry_2 *p) {
@@ -136,7 +136,7 @@ static errcode_t make_indexed_dir(ext2_filsys fs, ext2_ino_t dir, struct ext2_in
     struct dx_lookup_info dx_info;
 
     if (ext2fs_has_feature_metadata_csum(fs->super))
-		csum_size = sizeof(struct ext2_dir_entry_tail);
+        csum_size = sizeof(struct ext2_dir_entry_tail);
 
     if ((retval = ext2fs_expand_dir2(fs, dir)) != 0)
         return retval;
@@ -164,14 +164,14 @@ static errcode_t make_indexed_dir(ext2_filsys fs, ext2_ino_t dir, struct ext2_in
     top = data2 + len;
     while ((char *) (de2 = get_next_entry(fs, de)) < top)
         de = de2;
-    ext2fs_set_rec_len(fs, data2 + (blocksize - csum_size) - (char *) de, de);
+    ext2fs_set_rec_len(fs, data2 + (blocksize - csum_size) - (char *) de, (struct ext2_dir_entry *)de);
     if (csum_size)
         ext2fs_initialize_dirent_tail(fs, EXT2_DIRENT_TAIL(data2, blocksize));
 
     /* Initialize the root; the dot dirents already exist */
     diri->i_flags |= EXT2_INDEX_FL;
     de = (struct ext2_dir_entry_2 *) (&root->dotdot);
-    ext2fs_set_rec_len(fs, blocksize - EXT2_DIR_REC_LEN(2), de);
+    ext2fs_set_rec_len(fs, blocksize - EXT2_DIR_REC_LEN(2), (struct ext2_dir_entry *)de);
     memset(&root->info, 0, sizeof(root->info));
     root->info.info_length = sizeof(root->info);
     if (ext4_hash_in_dirent(diri)) {
@@ -188,8 +188,8 @@ static errcode_t make_indexed_dir(ext2_filsys fs, ext2_ino_t dir, struct ext2_in
     for (int i = 0; i < dx_info.levels; i++)
         ext2fs_write_dir_block4(fs, dx_info.frames[i].pblock, dx_info.frames[i].buf, 0, dir);
     /* write out inode (dx_root) */
-	if ((retval = ext2fs_write_inode(fs, dir, diri)) != 0)
-		return retval;
+    if ((retval = ext2fs_write_inode(fs, dir, diri)) != 0)
+        return retval;
 
     /* free frames */
     dx_release(&dx_info);
@@ -259,8 +259,8 @@ errcode_t ext2fs_expand_dir(ext2_filsys fs, ext2_ino_t dir) {
     struct ext2_inode inode;
 
     retval = ext2fs_read_inode(fs, dir, &inode);
-	if (retval)
-		return retval;
+    if (retval)
+        return retval;
 
     unsigned int blocks = inode.i_size >> (fs->super->s_log_block_size + EXT2_MIN_BLOCK_LOG_SIZE);
 

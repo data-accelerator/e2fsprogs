@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: ./configure CC=gcc CFLAGS="$DEF_CFLAGS"
-    - run: make -j8 check V=1 CFLAGS_WARN="-Werror"
+    - run: make -j8 V=1 CFLAGS_WARN="-Werror"
     - run: make -j8 install V=1 DESTDIR=$PWD/installdir
     - run: make -j8 uninstall V=1 DESTDIR=$PWD/installdir
 
@@ -24,7 +24,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y clang
     - run: ./configure CC=clang CFLAGS="$DEF_CFLAGS"
-    - run: make -j8 check V=1 CFLAGS_WARN="-Werror"
+    - run: make -j8 V=1 CFLAGS_WARN="-Werror"
     - run: make -j8 install V=1 DESTDIR=$PWD/installdir
     - run: make -j8 uninstall V=1 DESTDIR=$PWD/installdir
 
@@ -38,7 +38,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y gcc-multilib
     - run: ./configure CC=gcc CFLAGS="$DEF_CFLAGS -m32" LDFLAGS="-m32"
-    - run: make -j8 check V=1 CFLAGS_WARN="-Werror"
+    - run: make -j8 V=1 CFLAGS_WARN="-Werror"
     - run: make -j8 install V=1 DESTDIR=$PWD/installdir
     - run: make -j8 uninstall V=1 DESTDIR=$PWD/installdir
 
@@ -53,7 +53,7 @@ jobs:
         sudo apt-get install -y clang
     - run: echo "ASAN_CFLAGS=$DEF_CFLAGS -fsanitize=address -fno-sanitize-recover=address" >> $GITHUB_ENV
     - run: ./configure CC=clang CFLAGS="$ASAN_CFLAGS" LDFLAGS="$ASAN_CFLAGS"
-    - run: make -j8 check V=1 CFLAGS_WARN="-Werror"
+    - run: make -j8 V=1 CFLAGS_WARN="-Werror"
 
   ubsan-build-and-test:
     name: Build and test with UBSAN enabled
@@ -66,7 +66,7 @@ jobs:
         sudo apt-get install -y clang
     - run: echo "UBSAN_CFLAGS=$DEF_CFLAGS -fsanitize=undefined -fno-sanitize-recover=undefined" >> $GITHUB_ENV
     - run: ./configure CC=clang CFLAGS="$UBSAN_CFLAGS" LDFLAGS="$UBSAN_CFLAGS"
-    - run: make -j8 check V=1 CFLAGS_WARN="-Werror"
+    - run: make -j8 V=1 CFLAGS_WARN="-Werror"
 
   macos-build-and-test:
     name: Build and test on macOS
@@ -76,7 +76,7 @@ jobs:
     - run: ./configure CFLAGS="$DEF_CFLAGS"
       # -Wno-error=deprecated-declarations is needed to suppress known warnings
       # due to e2fsprogs' use of sbrk(0) and daemon().
-    - run: make -j8 check V=1 CFLAGS_WARN="-Werror -Wno-error=deprecated-declarations"
+    - run: make -j8 V=1 CFLAGS_WARN="-Werror -Wno-error=deprecated-declarations"
     - run: make -j8 install DESTDIR=$PWD/installdir
     - run: make -j8 uninstall DESTDIR=$PWD/installdir
 

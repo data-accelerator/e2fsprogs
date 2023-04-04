@@ -38,17 +38,17 @@ static int lookup_proc(ext2_ino_t dir EXT2FS_ATTR((unused)),
 		       char	*buf EXT2FS_ATTR((unused)),
 		       void	*priv_data)
 {
-	struct lookup_struct *ls = (struct lookup_struct *) priv_data;
+    struct lookup_struct *ls = (struct lookup_struct *) priv_data;
 
     if (dirent->inode == 0)
         return 0;
-	if (ls->len != ext2fs_dirent_name_len(dirent))
-		return 0;
-	if (strncmp(ls->name, dirent->name, ext2fs_dirent_name_len(dirent)))
-		return 0;
-	*ls->inode = dirent->inode;
-	ls->found++;
-	return DIRENT_ABORT;
+    if (ls->len != ext2fs_dirent_name_len(dirent))
+        return 0;
+    if (strncmp(ls->name, dirent->name, ext2fs_dirent_name_len(dirent)))
+        return 0;
+    *ls->inode = dirent->inode;
+    ls->found++;
+    return DIRENT_ABORT;
 }
 
 static errcode_t dx_namei(ext2_filsys fs, ext2_ino_t dir, struct ext2_inode *diri, const char *name, int namelen, char *buf, ext2_ino_t *res_inode) {
@@ -106,11 +106,11 @@ cleanup:
 errcode_t ext2fs_lookup(ext2_filsys fs, ext2_ino_t dir, const char *name,
 			int namelen, char *buf, ext2_ino_t *inode)
 {
-	errcode_t	retval;
-	struct lookup_struct ls;
+    errcode_t	retval;
+    struct lookup_struct ls;
     struct ext2_inode diri;
 
-	EXT2_CHECK_MAGIC(fs, EXT2_ET_MAGIC_EXT2FS_FILSYS);
+    EXT2_CHECK_MAGIC(fs, EXT2_ET_MAGIC_EXT2FS_FILSYS);
 
     if ((retval = ext2fs_read_inode(fs, dir, &diri)) != 0)
         return retval;
@@ -118,16 +118,16 @@ errcode_t ext2fs_lookup(ext2_filsys fs, ext2_ino_t dir, const char *name,
     if (diri.i_flags & EXT2_INDEX_FL)
         return dx_namei(fs, dir, &diri, name, namelen, buf, inode);
 
-	ls.name = name;
-	ls.len = namelen;
-	ls.inode = inode;
-	ls.found = 0;
+    ls.name = name;
+    ls.len = namelen;
+    ls.inode = inode;
+    ls.found = 0;
 
-	retval = ext2fs_dir_iterate2(fs, dir, 0, buf, lookup_proc, &ls);
-	if (retval)
-		return retval;
+    retval = ext2fs_dir_iterate2(fs, dir, 0, buf, lookup_proc, &ls);
+    if (retval)
+        return retval;
 
-	return (ls.found) ? 0 : EXT2_ET_FILE_NOT_FOUND;
+    return (ls.found) ? 0 : EXT2_ET_FILE_NOT_FOUND;
 }
 
 
