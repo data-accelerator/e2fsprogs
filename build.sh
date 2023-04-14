@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=v1.46.6-opt
+VERSION=${1:-"v1.47.0-opt"}
 ARCH=`uname -m`
 RELEASE=`date "+%Y%m%d%H%M%S"`
 
@@ -14,8 +14,10 @@ fi
 
 echo "build ..."
 cd build
-../configure --enable-elf-shlibs CFLAGS="-fPIC -O3" CXXFLAGS="-fPIC -O3" --prefix=`pwd`/${VERSION}
-make -j
+../configure --enable-elf-shlibs --disable-debugfs --disable-imager --disable-resizer --disable-defrag \
+    --disable-uuidd --disable-fuse2fs --disable-fsck --disable-e2initrd-helper \
+    CFLAGS="-fPIC -O3" CXXFLAGS="-fPIC -O3" --prefix=`pwd`/${VERSION}
+make -j8
 sudo make install
 
 mkdir libext2fs libext2fs/include libext2fs/lib
