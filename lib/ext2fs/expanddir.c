@@ -154,7 +154,7 @@ static errcode_t make_indexed_dir(ext2_filsys fs, ext2_ino_t dir, struct ext2_in
     root = (struct ext2_dx_root *) (dx_info.frames[0].buf);
     fde = &(root->dotdot);
     de = (struct ext2_dir_entry_2 *) ((char *) fde + get_rec_len(fs, fde->rec_len));
-    if ((char *) de >= (((char *) root) + blocksize))
+    if ((char *) de > (((char *) root) + blocksize - csum_size))
         return EXT2_FILSYS_CORRUPTED;
     len = ((char *) root) + (blocksize - csum_size) - (char *) de;
     data2 = dx_info.frames[1].buf;
