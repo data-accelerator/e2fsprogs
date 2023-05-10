@@ -218,7 +218,11 @@ errcode_t ext2fs_initialize(const char *name, int flags,
 	}
 
 	set_field(s_checkinterval, 0);
+#ifndef NO_TIMESTAMP
 	super->s_mkfs_time = super->s_lastcheck = fs->now ? fs->now : time(NULL);
+#else
+	super->s_mkfs_time = super->s_lastcheck = 0;
+#endif
 
 	super->s_creator_os = CREATOR_OS;
 
