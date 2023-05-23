@@ -21,10 +21,10 @@
 #include "ext2fsP.h"
 
 struct lookup_struct  {
-	const char	*name;
-	int		len;
-	ext2_ino_t	*inode;
-	int		found;
+    const char  *name;
+    int         len;
+    ext2_ino_t  *inode;
+    int         found;
 };
 
 #ifdef __TURBOC__
@@ -33,14 +33,14 @@ struct lookup_struct  {
 static int lookup_proc(ext2_ino_t dir EXT2FS_ATTR((unused)),
                int entru EXT2FS_ATTR((unused)),
                struct ext2_dir_entry *dirent,
-		       int	offset EXT2FS_ATTR((unused)),
-		       int	blocksize EXT2FS_ATTR((unused)),
-		       char	*buf EXT2FS_ATTR((unused)),
-		       void	*priv_data)
+               int	offset EXT2FS_ATTR((unused)),
+               int	blocksize EXT2FS_ATTR((unused)),
+               char	*buf EXT2FS_ATTR((unused)),
+               void	*priv_data)
 {
     struct lookup_struct *ls = (struct lookup_struct *) priv_data;
 
-    if (dirent->inode == 0)
+    if (dirent->inode == 0 /* useless? */)
         return 0;
     if (ls->len != ext2fs_dirent_name_len(dirent))
         return 0;
@@ -49,6 +49,54 @@ static int lookup_proc(ext2_ino_t dir EXT2FS_ATTR((unused)),
     *ls->inode = dirent->inode;
     ls->found++;
     return DIRENT_ABORT;
+}
+
+/**
+ * @return 0 if the caller should continue to search, or errcode
+*/
+static int htree_next_block(ext2_filsys fs, ext2_ino_t dir, struct ext2_inode *diri, struct dx_lookup_info *info) {
+    errcode_t retval = 0;
+    struct dx_frame *p;
+    int num_frames = 0;
+
+    p = &(info->frames[info->levels - 1]);
+    /*
+     * Find the next leaf page by incrementing the frame pointer.
+     * If we run out of entries in the interior node, loop around and
+     * increment pointer in the parent node.  When we break out of
+     * this loop, num_frames indicates the number of interior
+     * nodes need to be read.
+     */
+    while (1) {
+        int count = ext2fs_le16_to_cpu(p->head->count);
+        if (++(p->at) < p->entries + count) break;
+        if (p == info->frames) return EXT2_ET_FILE_NOT_FOUND;
+        num_frames++;
+        p--;
+    }
+
+    __u32 next_hash = ext2fs_le32_to_cpu(p->at->hash);
+    if ((info->hash & 1) == 0 /* useless? */ && (next_hash & ~1) != info->hash) {
+        return EXT2_ET_FILE_NOT_FOUND;
+    }
+
+    while (num_frames--) {
+        e2_blkcnt_t blockcnt = ext2fs_le32_to_cpu(info->frames[info->levels-1].at->block) & 0x0fffffff;
+        p++;
+        if ((retval = load_logical_dir_block(fs, dir, diri, blockcnt, &(p->pblock), p->buf)) != 0) {
+            return retval;
+        }
+        if ((retval = ext2fs_get_dx_countlimit(fs, p->buf, &(p->head), NULL)) != 0) {
+            return retval;
+        }
+        int count = ext2fs_le16_to_cpu(p->head->count);
+        int limit = ext2fs_le16_to_cpu(p->head->limit);
+        if (!count || count > limit) {
+            return EXT2_ET_DIR_CORRUPTED;
+        }
+        p->at = p->entries = (struct ext2_dx_entry *) (p->head);
+    }
+    return 0;
 }
 
 static errcode_t dx_namei(ext2_filsys fs, ext2_ino_t dir, struct ext2_inode *diri, const char *name, int namelen, char *buf, ext2_ino_t *res_inode) {
@@ -68,43 +116,48 @@ static errcode_t dx_namei(ext2_filsys fs, ext2_ino_t dir, struct ext2_inode *dir
     if ((retval = dx_lookup(fs, dir, diri, &dx_info)) != 0)
         goto cleanup;
 
-    e2_blkcnt_t blockcnt = ext2fs_le32_to_cpu(dx_info.frames[dx_info.levels-1].at->block) & 0x0fffffff;
-    if ((retval = load_logical_dir_block(fs, dir, diri, blockcnt, &leaf_pblk, buf)) != 0)
-        goto cleanup;
+    do {
+        e2_blkcnt_t blockcnt = ext2fs_le32_to_cpu(dx_info.frames[dx_info.levels-1].at->block) & 0x0fffffff;
 
-    struct dir_context ctx;
-    struct lookup_struct ls;
-    ctx.errcode = 0;
-    ctx.func = lookup_proc;
-    ctx.dir = dir;
-    ctx.flags = DIRENT_FLAG_INCLUDE_EMPTY;
-    ctx.buf = buf;
-    ctx.priv_data = &ls;
+        if ((retval = load_logical_dir_block(fs, dir, diri, blockcnt, &leaf_pblk, buf)) != 0)
+            goto cleanup;
 
-    ls.name = name;
-    ls.len = namelen;
-    ls.inode = res_inode;
-    ls.found = 0;
+        struct dir_context ctx;
+        struct lookup_struct ls;
+        ctx.errcode = 0;
+        ctx.func = lookup_proc;
+        ctx.dir = dir;
+        ctx.flags = 0;
+        ctx.buf = buf;
+        ctx.priv_data = &ls;
 
-    ext2fs_process_dir_block(fs, &leaf_pblk, blockcnt, 0, 0, &ctx);
-    dx_release(&dx_info);
-    if (ctx.errcode) {
-        retval = ctx.errcode;
-        goto cleanup;
-    }
+        ls.name = name;
+        ls.len = namelen;
+        ls.inode = res_inode;
+        ls.found = 0;
 
-    if (!ls.found)
-        retval = EXT2_ET_FILE_NOT_FOUND;
+        ext2fs_process_dir_block(fs, &leaf_pblk, blockcnt, 0, 0, &ctx);
+        if (ctx.errcode) {
+            retval = ctx.errcode;
+            goto cleanup;
+        }
+        if (ls.found) {
+            break;
+        }
+        retval = htree_next_block(fs, dir, diri, &dx_info);
+    } while (retval == 0);
+
 cleanup:
     if (block_buf) {
         ext2fs_free_mem(&block_buf);
     }
+    dx_release(&dx_info);
 
     return retval;
 }
 
 errcode_t ext2fs_lookup(ext2_filsys fs, ext2_ino_t dir, const char *name,
-			int namelen, char *buf, ext2_ino_t *inode)
+            int namelen, char *buf, ext2_ino_t *inode)
 {
     errcode_t	retval;
     struct lookup_struct ls;
