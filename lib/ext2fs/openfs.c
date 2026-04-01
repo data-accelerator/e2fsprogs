@@ -85,12 +85,49 @@ blk_t ext2fs_descriptor_block_loc(ext2_filsys fs, blk_t group_block, dgrp_t i)
 	return ext2fs_descriptor_block_loc2(fs, group_block, i);
 }
 
+static errcode_t disable_htree_for_lost_found(ext2_filsys fs) {
+    char *name = "lost+found";
+    errcode_t ret;
+    ext2_ino_t ino;
+    ret = ext2fs_lookup(fs, EXT2_ROOT_INO, name, strlen(name), 0, &ino);
+    if (ret) {
+        return ret;
+    }
+    struct ext2_inode inode;
+    ret = ext2fs_read_inode(fs, ino, &inode);
+    if (ret) {
+        return ret;
+    }
+    if (inode.i_flags & EXT2_INDEX_FL) {
+        inode.i_flags &= ~EXT2_INDEX_FL;
+        ret = ext2fs_write_inode(fs, ino, &inode);
+        if (ret) {
+            return ret;
+        }
+    }
+    return 0;
+}
+
 errcode_t ext2fs_open(const char *name, int flags, int superblock,
 		      unsigned int block_size, io_manager manager,
 		      ext2_filsys *ret_fs)
 {
-	return ext2fs_open2(name, 0, flags, superblock, block_size,
+	errcode_t ret = ext2fs_open2(name, 0, flags, superblock, block_size,
 			    manager, ret_fs);
+    if (ret) {
+        return ret;
+    }
+    ret = ext2fs_read_bitmaps(*ret_fs);
+    if (ret) {
+        ext2fs_close(*ret_fs);
+        return ret;
+    }
+    ret = disable_htree_for_lost_found(*ret_fs);
+    if (ret) {
+        ext2fs_close(*ret_fs);
+        return ret;
+    }
+    return 0;
 }
 
 static void block_sha_map_free_entry(void *data)
