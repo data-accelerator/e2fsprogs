@@ -113,6 +113,8 @@ struct ext2_resize_struct {
 	ext2_extent	imap;
 	blk64_t		needed_blocks;
 	int		flags;
+	int		fast_shrink;
+	dgrp_t		new_group_count;
 	char		*itable_buf;
 
 	/*

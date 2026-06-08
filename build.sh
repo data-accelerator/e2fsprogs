@@ -14,7 +14,7 @@ fi
 
 echo "build ..."
 cd build
-../configure --enable-elf-shlibs --disable-debugfs --disable-imager --disable-resizer --disable-defrag \
+../configure --enable-elf-shlibs --disable-debugfs --disable-imager --disable-defrag \
     --disable-uuidd --disable-fuse2fs --disable-fsck --disable-e2initrd-helper \
     CFLAGS="-fPIC -O3" CXXFLAGS="-fPIC -O3" --prefix=`pwd`/${VERSION}
 make -j8
