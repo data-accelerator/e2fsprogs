@@ -202,7 +202,11 @@ allocated:
 
 	ext2fs_clear_block_uninit(fs, ext2fs_group_of_blk2(fs, b));
 	*ret = b;
-	fs->reserved[3] = (__u32)b;	// not 64-bit safe
+	/* reserved[] is 32 bits wide; drop a hint that would be truncated */
+	if (b <= 0xFFFFFFFFULL)
+		fs->reserved[3] = (__u32) b;
+	else
+		fs->reserved[3] = 0;
 	return 0;
 }
 
@@ -445,8 +449,7 @@ errcode_t ext2fs_new_range(ext2_filsys fs, int flags, blk64_t goal,
 	if (!map)
 		return EXT2_ET_NO_BLOCK_BITMAP;
 	if (!goal || goal >= ext2fs_blocks_count(fs->super))
-		goal = fs->reserved[3];
-		// goal = fs->super->s_first_data_block;
+		goal = fs->reserved[3] ? fs->reserved[3] : fs->super->s_first_data_block;
 
 	start = goal;
 	while (!looped || start <= goal) {
@@ -493,7 +496,16 @@ allocated:
 			     b += fs->super->s_blocks_per_group)
 				ext2fs_clear_block_uninit(fs,
 						ext2fs_group_of_blk2(fs, b));
-			fs->reserved[3] = (__u32) end;
+			/*
+			 * Only keep a hint which can still be used as a
+			 * search start: reserved[] is 32 bits wide, so a
+			 * larger value would be truncated into an unrelated
+			 * block number.
+			 */
+			if (end < ext2fs_blocks_count(fs->super) && end <= 0xFFFFFFFFULL)
+				fs->reserved[3] = (__u32) end;
+			else
+				fs->reserved[3] = 0;
 			return 0;
 		}
 

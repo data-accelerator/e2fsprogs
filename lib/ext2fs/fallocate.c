@@ -695,7 +695,12 @@ start_again:
 	if (err == EXT2_ET_NO_CURRENT_NODE) {
 		blk64_t max_blocks = ext2fs_blocks_count(fs->super);
 
-		goal = fs->reserved[3];
+		/*
+		 * Only follow the hint while it still points inside the file
+		 * system, so that the ~0ULL goal sentinel keeps working.
+		 */
+		if (fs->reserved[3] && fs->reserved[3] < max_blocks)
+			goal = fs->reserved[3];
 		if (goal == ~0ULL)
 			goal = ext2fs_find_inode_goal(fs, ino, inode, start);
 		err = ext2fs_find_first_zero_block_bitmap2(fs->block_map,
